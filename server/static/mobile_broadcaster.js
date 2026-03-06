@@ -12,6 +12,8 @@ const peers = new Map();
 let serverRecorder = null;
 let recordSessionId = null;
 let shutdownStarted = false;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
 
 function wsUrl() {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
@@ -113,6 +115,11 @@ async function shutdownTransmitter() {
   if (shutdownStarted) return;
   shutdownStarted = true;
 
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
   peers.forEach((pc) => pc.close());
   peers.clear();
 
@@ -125,18 +132,40 @@ async function shutdownTransmitter() {
   stopLocalStream();
 }
 
+function scheduleReconnect() {
+  if (shutdownStarted) return;
+  if (reconnectTimer) return;
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  reconnectAttempts += 1;
+  const delayMs = Math.min(1000 * reconnectAttempts, 5000);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectSocket();
+  }, delayMs);
+}
+
 function connectSocket() {
   ws = new WebSocket(wsUrl());
 
+  ws.onopen = () => {
+    reconnectAttempts = 0;
+  };
+
   ws.onclose = () => {
     if (!shutdownStarted) {
-      void shutdownTransmitter();
+      ws = null;
+      scheduleReconnect();
     }
   };
 
   ws.onerror = () => {
     if (!shutdownStarted) {
-      void shutdownTransmitter();
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
     }
   };
 
@@ -167,6 +196,12 @@ function connectSocket() {
       const pc = peers.get(msg.from);
       if (!pc || !msg.candidate) return;
       await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+      return;
+    }
+
+    if (msg.type === "error") {
+      console.error("Erro de sinalizacao:", msg.message || "erro desconhecido");
+      scheduleReconnect();
     }
   };
 }
