@@ -44,8 +44,21 @@ function ensurePeerConnection() {
 
   pc.ontrack = (event) => {
     if (!event.streams || !event.streams[0]) return;
-    remoteVideo.srcObject = event.streams[0];
-    setStatus("Recebendo transmissao.");
+    if (remoteVideo.srcObject !== event.streams[0]) {
+      remoteVideo.srcObject = event.streams[0];
+    }
+
+    const playPromise = remoteVideo.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise
+        .then(() => setStatus("Recebendo transmissao ao vivo."))
+        .catch(() => {
+          setStatus("Transmissao recebida. Toque no botao Play do video para iniciar ao vivo.");
+        });
+      return;
+    }
+
+    setStatus("Recebendo transmissao ao vivo.");
   };
 
   pc.onicecandidate = (event) => {
