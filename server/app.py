@@ -151,15 +151,11 @@ async def websocket_signaling(ws: WebSocket, room_id: str, role: str) -> None:
 
     if role == "broadcaster":
         if room.broadcaster_ws is not None:
-            await send_json(
-                ws,
-                {
-                    "type": "error",
-                    "message": "Ja existe um broadcaster ativo nesta sala.",
-                },
-            )
-            await ws.close(code=1008)
-            return
+            try:
+                await send_json(room.broadcaster_ws, {"type": "error", "message": "Novo transmissor conectado."})
+                await room.broadcaster_ws.close(code=1000)
+            except RuntimeError:
+                pass
         room.broadcaster_ws = ws
         room.broadcaster_id = client_id
     else:
@@ -246,4 +242,4 @@ async def websocket_signaling(ws: WebSocket, room_id: str, role: str) -> None:
                     pass
 
         if room.broadcaster_ws is None and not room.viewers:
-            rooms.pop(room_id.strip().lower(), None)
+            rooms.pop(sanitize_room_id(room_id), None)
