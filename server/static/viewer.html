@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Visualizador</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <section class="card">
+        <h1>Visualizador</h1>
+        <p id="roomLabel"></p>
+        <div class="actions">
+          <button id="startRecordBtn">Iniciar gravacao local</button>
+          <button id="stopRecordBtn" class="stop" disabled>Parar gravacao</button>
+        </div>
+        <p id="status" class="status">Conectando...</p>
+        <video id="remoteVideo" autoplay playsinline controls></video>
+      </section>
+
+      <section class="card">
+        <h2>Gravacoes no servidor</h2>
+        <div class="actions">
+          <button id="refreshRecordingsBtn">Atualizar lista</button>
+        </div>
+        <p id="recordingsStatus" class="status">Carregando gravacoes...</p>
+        <ul id="recordingsList"></ul>
+      </section>
+    </main>
+
+    <script src="/static/viewer.js"></script>
+  </body>
+</html>

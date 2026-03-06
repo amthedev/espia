@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Passageiro Streaming</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <section class="card">
+        <h1>Passageiro Streaming</h1>
+        <p>O app Android transmite. O site e usado para assistir e baixar gravacoes.</p>
+        <input id="roomInput" placeholder="Nome da sala (ex: sala1)" value="sala1" />
+        <div class="actions">
+          <button id="openViewer">Abrir visualizador</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const roomInput = document.getElementById("roomInput");
+      const openViewer = document.getElementById("openViewer");
+
+      const getRoom = () => encodeURIComponent((roomInput.value || "sala1").trim());
+
+      openViewer.addEventListener("click", () => {
+        window.location.href = `/static/viewer.html?room=${getRoom()}`;
+      });
+    </script>
+  </body>
+</html>

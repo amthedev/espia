@@ -1,0 +1,7 @@
+﻿.venv/
+kivy_app/.buildozer/
+kivy_app/bin/
+__pycache__/
+*.pyc
+*.pyo
+*.webm
