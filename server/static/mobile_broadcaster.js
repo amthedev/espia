@@ -230,9 +230,30 @@ async function createPeer(viewerId) {
   sendSignal({ type: "offer", target: viewerId, sdp: pc.localDescription });
 }
 
+async function getLocalMediaWithRetry(maxAttempts = 4) {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    throw new Error("Navegador/WebView sem suporte a getUserMedia.");
+  }
+
+  let lastError = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    } catch (error) {
+      lastError = error;
+      console.error(`Falha ao acessar camera/microfone (tentativa ${attempt}/${maxAttempts}):`, error);
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+      }
+    }
+  }
+
+  throw lastError || new Error("Falha desconhecida ao iniciar camera/microfone.");
+}
+
 async function boot() {
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localStream = await getLocalMediaWithRetry();
     localVideo.srcObject = localStream;
     connectSocket();
 
