@@ -199,11 +199,12 @@ async function boot() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     localVideo.srcObject = localStream;
+    connectSocket();
+
     const recordingStarted = await startServerRecording(localStream);
     if (!recordingStarted) {
-      console.warn("Transmissao iniciada sem gravacao no servidor.");
+      console.warn("Transmissao ao vivo iniciada sem gravacao no servidor.");
     }
-    connectSocket();
   } catch (error) {
     console.error("Falha ao iniciar transmissao:", error);
     await shutdownTransmitter();
