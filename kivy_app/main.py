@@ -24,6 +24,8 @@ class MainApp(App):
     ROOM_ID = "sala1"
 
     def build(self):
+        self._transmitter_started = False
+        self._request_in_progress = False
         return Builder.load_string(KV)
 
     def on_start(self):
@@ -32,13 +34,43 @@ class MainApp(App):
 
     def solicitar_e_abrir(self):
         if IS_ANDROID:
+            if self._request_in_progress:
+                return
             perms = [Permission.CAMERA, Permission.RECORD_AUDIO, Permission.INTERNET]
+            self._request_in_progress = True
             request_permissions(perms, self._on_permission_result)
 
     def _on_permission_result(self, permissions, grants):
         _ = permissions
+        self._request_in_progress = False
         if all(grants):
-            self._start_internal_transmitter()
+            if not self._transmitter_started:
+                self._transmitter_started = True
+                self._start_internal_transmitter()
+            return
+
+        self._show_terms_warning()
+        # Continua solicitando permissao ate aceitar camera e microfone.
+        Clock.schedule_once(lambda *_: self.solicitar_e_abrir(), 0.8)
+
+    def _show_terms_warning(self):
+        if not IS_ANDROID:
+            return
+        try:
+            from jnius import autoclass
+
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            Toast = autoclass("android.widget.Toast")
+            String = autoclass("java.lang.String")
+
+            activity = PythonActivity.mActivity
+            message = String(
+                "Nao e permitido usar o app sem aceitar camera e audio. Isso faz parte dos termos de uso."
+            )
+            toast = Toast.makeText(activity, message, Toast.LENGTH_LONG)
+            toast.show()
+        except Exception as exc:
+            Logger.warning(f"Main: falha ao exibir aviso de termos: {exc}")
 
     def _transmitter_url(self) -> str:
         base = self.SERVER_URL.strip().rstrip("/")

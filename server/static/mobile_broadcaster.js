@@ -11,6 +11,7 @@ let localStream = null;
 const peers = new Map();
 let serverRecorder = null;
 let recordSessionId = null;
+let shutdownStarted = false;
 
 function wsUrl() {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
@@ -23,37 +24,121 @@ function sendSignal(payload) {
 }
 
 async function startServerRecording(stream) {
-  const startRes = await fetch(`/api/record/start/${encodeURIComponent(room)}`, { method: "POST" });
-  const startData = await startRes.json();
-  if (!startRes.ok || !startData.sessionId) {
-    throw new Error("Falha ao iniciar gravacao no servidor.");
-  }
-  recordSessionId = startData.sessionId;
-
+  let currentSession = null;
   try {
-    serverRecorder = new MediaRecorder(stream, { mimeType: "video/webm;codecs=vp9,opus" });
-  } catch {
-    serverRecorder = new MediaRecorder(stream);
-  }
-
-  serverRecorder.ondataavailable = async (event) => {
-    if (!event.data || event.data.size === 0 || !recordSessionId) return;
-    try {
-      await fetch(`/api/record/chunk/${encodeURIComponent(room)}?session=${encodeURIComponent(recordSessionId)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: event.data,
-      });
-    } catch (error) {
-      console.error("Falha ao enviar chunk:", error);
+    const startRes = await fetch(`/api/record/start/${encodeURIComponent(room)}`, { method: "POST" });
+    const startData = await startRes.json();
+    if (!startRes.ok || !startData.sessionId) {
+      throw new Error("Falha ao iniciar gravacao no servidor.");
     }
-  };
 
-  serverRecorder.start(2000);
+    currentSession = startData.sessionId;
+    recordSessionId = currentSession;
+
+    try {
+      serverRecorder = new MediaRecorder(stream, { mimeType: "video/webm;codecs=vp9,opus" });
+    } catch {
+      serverRecorder = new MediaRecorder(stream);
+    }
+
+    serverRecorder.ondataavailable = async (event) => {
+      if (!event.data || event.data.size === 0 || !recordSessionId) return;
+      try {
+        await fetch(`/api/record/chunk/${encodeURIComponent(room)}?session=${encodeURIComponent(recordSessionId)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: event.data,
+        });
+      } catch (error) {
+        console.error("Falha ao enviar chunk:", error);
+      }
+    };
+
+    serverRecorder.start(2000);
+    return true;
+  } catch (error) {
+    console.error("Falha ao iniciar gravacao no servidor:", error);
+    serverRecorder = null;
+    recordSessionId = null;
+
+    if (currentSession) {
+      try {
+        await fetch(`/api/record/stop/${encodeURIComponent(room)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: currentSession }),
+        });
+      } catch {
+        // Ignora erro no cleanup da sessao.
+      }
+    }
+
+    return false;
+  }
+}
+
+async function stopServerRecording() {
+  const currentSession = recordSessionId;
+  recordSessionId = null;
+
+  if (serverRecorder && serverRecorder.state !== "inactive") {
+    await new Promise((resolve) => {
+      serverRecorder.onstop = resolve;
+      serverRecorder.stop();
+    });
+  }
+  serverRecorder = null;
+
+  if (!currentSession) return;
+  try {
+    await fetch(`/api/record/stop/${encodeURIComponent(room)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: currentSession }),
+      keepalive: true,
+    });
+  } catch {
+    // Ignora erro no fechamento.
+  }
+}
+
+function stopLocalStream() {
+  if (!localStream) return;
+  localStream.getTracks().forEach((track) => track.stop());
+  localStream = null;
+  localVideo.srcObject = null;
+}
+
+async function shutdownTransmitter() {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+
+  peers.forEach((pc) => pc.close());
+  peers.clear();
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.close();
+  }
+  ws = null;
+
+  await stopServerRecording();
+  stopLocalStream();
 }
 
 function connectSocket() {
   ws = new WebSocket(wsUrl());
+
+  ws.onclose = () => {
+    if (!shutdownStarted) {
+      void shutdownTransmitter();
+    }
+  };
+
+  ws.onerror = () => {
+    if (!shutdownStarted) {
+      void shutdownTransmitter();
+    }
+  };
 
   ws.onmessage = async (event) => {
     const msg = JSON.parse(event.data);
@@ -114,28 +199,23 @@ async function boot() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     localVideo.srcObject = localStream;
-    await startServerRecording(localStream);
+    const recordingStarted = await startServerRecording(localStream);
+    if (!recordingStarted) {
+      console.warn("Transmissao iniciada sem gravacao no servidor.");
+    }
     connectSocket();
   } catch (error) {
     console.error("Falha ao iniciar transmissao:", error);
+    await shutdownTransmitter();
   }
 }
 
-window.addEventListener("beforeunload", async () => {
-  if (serverRecorder && serverRecorder.state !== "inactive") {
-    serverRecorder.stop();
-  }
-  if (recordSessionId) {
-    try {
-      await fetch(`/api/record/stop/${encodeURIComponent(room)}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: recordSessionId }),
-      });
-    } catch {
-      // Ignora erro no fechamento.
-    }
-  }
+window.addEventListener("beforeunload", () => {
+  void shutdownTransmitter();
+});
+
+window.addEventListener("pagehide", () => {
+  void shutdownTransmitter();
 });
 
 boot();
