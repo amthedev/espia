@@ -3,6 +3,9 @@ const room = params.get("room") || "sala1";
 const roomLabel = document.getElementById("roomLabel");
 const statusEl = document.getElementById("status");
 const remoteVideo = document.getElementById("remoteVideo");
+const videoPlaceholder = document.getElementById("videoPlaceholder");
+const toggleMuteBtn = document.getElementById("toggleMuteBtn");
+const fullscreenBtn = document.getElementById("fullscreenBtn");
 const startRecordBtn = document.getElementById("startRecordBtn");
 const stopRecordBtn = document.getElementById("stopRecordBtn");
 const refreshRecordingsBtn = document.getElementById("refreshRecordingsBtn");
@@ -10,6 +13,7 @@ const recordingsStatus = document.getElementById("recordingsStatus");
 const recordingsList = document.getElementById("recordingsList");
 
 roomLabel.textContent = `Sala: ${room}`;
+remoteVideo.muted = true;
 
 const rtcConfig = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -26,6 +30,16 @@ function setStatus(text) {
 
 function setRecordingsStatus(text) {
   recordingsStatus.textContent = text;
+}
+
+function setPlaceholderVisible(visible) {
+  if (!videoPlaceholder) return;
+  videoPlaceholder.classList.toggle("hidden", !visible);
+}
+
+function syncMuteButton() {
+  if (!toggleMuteBtn) return;
+  toggleMuteBtn.textContent = remoteVideo.muted ? "Ativar audio" : "Silenciar audio";
 }
 
 function wsUrl() {
@@ -47,6 +61,7 @@ function ensurePeerConnection() {
     if (remoteVideo.srcObject !== event.streams[0]) {
       remoteVideo.srcObject = event.streams[0];
     }
+    setPlaceholderVisible(false);
 
     const playPromise = remoteVideo.play();
     if (playPromise && typeof playPromise.catch === "function") {
@@ -109,6 +124,7 @@ function connectSocket() {
     if (msg.type === "broadcaster_left") {
       setStatus("Transmissor saiu da sala.");
       remoteVideo.srcObject = null;
+      setPlaceholderVisible(true);
       if (pc) {
         pc.close();
         pc = null;
@@ -116,8 +132,14 @@ function connectSocket() {
     }
   };
 
-  ws.onclose = () => setStatus("Conexao com servidor encerrada.");
-  ws.onerror = () => setStatus("Erro de conexao.");
+  ws.onclose = () => {
+    setStatus("Conexao com servidor encerrada.");
+    setPlaceholderVisible(true);
+  };
+  ws.onerror = () => {
+    setStatus("Erro de conexao.");
+    setPlaceholderVisible(true);
+  };
 }
 
 function formatSize(bytes) {
@@ -201,9 +223,42 @@ function stopRecording() {
   stopRecordBtn.disabled = true;
 }
 
+function toggleMute() {
+  remoteVideo.muted = !remoteVideo.muted;
+  syncMuteButton();
+  if (!remoteVideo.paused) {
+    return;
+  }
+  const playPromise = remoteVideo.play();
+  if (playPromise && typeof playPromise.catch === "function") {
+    playPromise.catch(() => {
+      setStatus("Toque no video para iniciar a reproducao ao vivo.");
+    });
+  }
+}
+
+async function enterFullscreen() {
+  try {
+    if (remoteVideo.requestFullscreen) {
+      await remoteVideo.requestFullscreen();
+      return;
+    }
+    if (remoteVideo.webkitEnterFullscreen) {
+      remoteVideo.webkitEnterFullscreen();
+    }
+  } catch (error) {
+    console.error(error);
+    setStatus("Nao foi possivel abrir em tela cheia.");
+  }
+}
+
 startRecordBtn.addEventListener("click", startRecording);
 stopRecordBtn.addEventListener("click", stopRecording);
 refreshRecordingsBtn.addEventListener("click", loadServerRecordings);
+toggleMuteBtn.addEventListener("click", toggleMute);
+fullscreenBtn.addEventListener("click", enterFullscreen);
 
 connectSocket();
 loadServerRecordings();
+syncMuteButton();
+setPlaceholderVisible(true);

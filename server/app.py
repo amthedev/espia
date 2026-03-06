@@ -55,6 +55,24 @@ async def health() -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
+@app.get("/api/devices")
+async def list_active_devices() -> JSONResponse:
+    items = []
+    for room_id, room in sorted(rooms.items()):
+        if room.broadcaster_ws is None:
+            continue
+        items.append(
+            {
+                "id": room_id,
+                "name": f"Dispositivo {room_id}",
+                "room": room_id,
+                "viewerCount": len(room.viewers),
+                "watchUrl": f"/static/viewer.html?room={room_id}",
+            }
+        )
+    return JSONResponse({"count": len(items), "items": items})
+
+
 @app.post("/api/record/start/{room_id}")
 async def start_recording(room_id: str) -> JSONResponse:
     safe_room = sanitize_room_id(room_id)
@@ -170,8 +188,9 @@ async def websocket_signaling(ws: WebSocket, room_id: str, role: str) -> None:
             {"type": "viewer_joined", "viewerId": client_id},
         )
     elif role == "broadcaster":
-        for viewer_ws in room.viewers.values():
+        for viewer_id, viewer_ws in room.viewers.items():
             await send_json(viewer_ws, {"type": "broadcaster_ready"})
+            await send_json(ws, {"type": "viewer_joined", "viewerId": viewer_id})
 
     try:
         while True:
@@ -223,13 +242,14 @@ async def websocket_signaling(ws: WebSocket, room_id: str, role: str) -> None:
         pass
     finally:
         if role == "broadcaster":
-            room.broadcaster_ws = None
-            room.broadcaster_id = None
-            for viewer_ws in room.viewers.values():
-                try:
-                    await send_json(viewer_ws, {"type": "broadcaster_left"})
-                except RuntimeError:
-                    continue
+            if room.broadcaster_ws is ws:
+                room.broadcaster_ws = None
+                room.broadcaster_id = None
+                for viewer_ws in room.viewers.values():
+                    try:
+                        await send_json(viewer_ws, {"type": "broadcaster_left"})
+                    except RuntimeError:
+                        continue
         else:
             room.viewers.pop(client_id, None)
             if room.broadcaster_ws is not None:

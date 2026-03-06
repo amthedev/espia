@@ -8,24 +8,42 @@
   </head>
   <body>
     <main class="container">
-      <section class="card">
-        <h1>Visualizador</h1>
-        <p id="roomLabel"></p>
-        <div class="actions">
+      <section class="card viewer-hero">
+        <div class="viewer-hero-copy">
+          <span class="eyebrow">Assistir ao vivo</span>
+          <h1>Visualizador</h1>
+          <p id="roomLabel" class="viewer-room"></p>
+        </div>
+        <p id="status" class="status status-pill">Conectando...</p>
+      </section>
+
+      <section class="card player-card">
+        <div class="player-shell">
+          <div class="live-badge">Ao vivo</div>
+          <video id="remoteVideo" autoplay playsinline></video>
+          <div id="videoPlaceholder" class="video-placeholder">
+            <div class="video-placeholder-inner">
+              <span class="placeholder-pulse"></span>
+              <strong>Aguardando transmissor</strong>
+              <span>Assim que um dispositivo entrar ao vivo, o video aparece aqui.</span>
+            </div>
+          </div>
+        </div>
+        <div class="actions viewer-toolbar">
+          <button id="toggleMuteBtn" class="secondary">Ativar audio</button>
+          <button id="fullscreenBtn" class="secondary">Tela cheia</button>
           <button id="startRecordBtn">Iniciar gravacao local</button>
           <button id="stopRecordBtn" class="stop" disabled>Parar gravacao</button>
         </div>
-        <p id="status" class="status">Conectando...</p>
-        <video id="remoteVideo" autoplay playsinline controls></video>
       </section>
 
-      <section class="card">
+      <section class="card recordings-card">
         <h2>Gravacoes no servidor</h2>
         <div class="actions">
           <button id="refreshRecordingsBtn">Atualizar lista</button>
         </div>
         <p id="recordingsStatus" class="status">Carregando gravacoes...</p>
-        <ul id="recordingsList"></ul>
+        <ul id="recordingsList" class="recordings-list"></ul>
       </section>
     </main>
 

@@ -8,25 +8,85 @@
   </head>
   <body>
     <main class="container">
-      <section class="card">
-        <h1>Passageiro Streaming</h1>
-        <p>O app Android transmite. O site e usado para assistir e baixar gravacoes.</p>
-        <input id="roomInput" placeholder="Nome da sala (ex: sala1)" value="sala1" />
-        <div class="actions">
-          <button id="openViewer">Abrir visualizador</button>
+      <section class="hero card">
+        <span class="eyebrow">Monitor ao vivo</span>
+        <h1>Dispositivos transmitindo</h1>
+        <p>Escolha um transmissor ativo para assistir ao vivo e acessar as gravacoes do servidor.</p>
+        <div class="actions hero-actions">
+          <button id="refreshDevices">Atualizar dispositivos</button>
         </div>
+        <p id="devicesStatus" class="status">Carregando dispositivos...</p>
+      </section>
+
+      <section class="card">
+        <div id="devicesList" class="device-grid"></div>
       </section>
     </main>
 
     <script>
-      const roomInput = document.getElementById("roomInput");
-      const openViewer = document.getElementById("openViewer");
+      const refreshDevices = document.getElementById("refreshDevices");
+      const devicesStatus = document.getElementById("devicesStatus");
+      const devicesList = document.getElementById("devicesList");
 
-      const getRoom = () => encodeURIComponent((roomInput.value || "sala1").trim());
+      function setDevicesStatus(text) {
+        devicesStatus.textContent = text;
+      }
 
-      openViewer.addEventListener("click", () => {
-        window.location.href = `/static/viewer.html?room=${getRoom()}`;
-      });
+      function createDeviceCard(device) {
+        const article = document.createElement("article");
+        article.className = "device-card";
+
+        const badge = document.createElement("span");
+        badge.className = "device-badge";
+        badge.textContent = "Ao vivo";
+
+        const title = document.createElement("h2");
+        title.textContent = device.name;
+
+        const meta = document.createElement("p");
+        meta.className = "device-meta";
+        meta.textContent = `Sala: ${device.room} • Viewers: ${device.viewerCount}`;
+
+        const button = document.createElement("button");
+        button.textContent = "Assistir agora";
+        button.addEventListener("click", () => {
+          window.location.href = device.watchUrl;
+        });
+
+        article.appendChild(badge);
+        article.appendChild(title);
+        article.appendChild(meta);
+        article.appendChild(button);
+        return article;
+      }
+
+      async function loadDevices() {
+        setDevicesStatus("Atualizando dispositivos...");
+        devicesList.innerHTML = "";
+        try {
+          const response = await fetch("/api/devices");
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.detail || "Falha ao carregar dispositivos.");
+          }
+
+          if (!data.items || data.items.length === 0) {
+            setDevicesStatus("Nenhum transmissor ativo no momento.");
+            return;
+          }
+
+          data.items.forEach((device) => {
+            devicesList.appendChild(createDeviceCard(device));
+          });
+          setDevicesStatus(`${data.count} dispositivo(s) transmitindo agora.`);
+        } catch (error) {
+          console.error(error);
+          setDevicesStatus("Erro ao carregar dispositivos.");
+        }
+      }
+
+      refreshDevices.addEventListener("click", loadDevices);
+      loadDevices();
     </script>
   </body>
 </html>

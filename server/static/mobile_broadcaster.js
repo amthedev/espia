@@ -148,13 +148,16 @@ function scheduleReconnect() {
 }
 
 function connectSocket() {
+  console.info("[mobile_broadcaster] conectando websocket...");
   ws = new WebSocket(wsUrl());
 
   ws.onopen = () => {
+    console.info("[mobile_broadcaster] websocket conectado.");
     reconnectAttempts = 0;
   };
 
   ws.onclose = () => {
+    console.warn("[mobile_broadcaster] websocket fechado; tentando reconectar.");
     if (!shutdownStarted) {
       ws = null;
       scheduleReconnect();
@@ -162,6 +165,7 @@ function connectSocket() {
   };
 
   ws.onerror = () => {
+    console.error("[mobile_broadcaster] erro no websocket.");
     if (!shutdownStarted) {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.close();
@@ -172,11 +176,13 @@ function connectSocket() {
   ws.onmessage = async (event) => {
     const msg = JSON.parse(event.data);
     if (msg.type === "viewer_joined") {
+      console.info(`[mobile_broadcaster] viewer conectado: ${msg.viewerId}`);
       await createPeer(msg.viewerId);
       return;
     }
 
     if (msg.type === "viewer_left") {
+      console.info(`[mobile_broadcaster] viewer saiu: ${msg.viewerId}`);
       const pc = peers.get(msg.viewerId);
       if (pc) {
         pc.close();
@@ -208,6 +214,7 @@ function connectSocket() {
 
 async function createPeer(viewerId) {
   if (!localStream || peers.has(viewerId)) return;
+  console.info(`[mobile_broadcaster] criando peer para viewer ${viewerId}`);
   const pc = new RTCPeerConnection(rtcConfig);
   peers.set(viewerId, pc);
 
@@ -238,6 +245,7 @@ async function getLocalMediaWithRetry(maxAttempts = 4) {
   let lastError = null;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
+      console.info(`[mobile_broadcaster] solicitando camera/microfone (tentativa ${attempt}/${maxAttempts})`);
       return await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     } catch (error) {
       lastError = error;
@@ -253,7 +261,9 @@ async function getLocalMediaWithRetry(maxAttempts = 4) {
 
 async function boot() {
   try {
+    console.info("[mobile_broadcaster] inicializando transmissor...");
     localStream = await getLocalMediaWithRetry();
+    console.info("[mobile_broadcaster] camera/microfone ativos.");
     localVideo.srcObject = localStream;
     connectSocket();
 

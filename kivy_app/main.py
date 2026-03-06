@@ -88,6 +88,7 @@ class MainApp(App):
             PythonActivity = autoclass("org.kivy.android.PythonActivity")
             WebView = autoclass("android.webkit.WebView")
             WebViewClient = autoclass("android.webkit.WebViewClient")
+            WebChromeClient = autoclass("android.webkit.WebChromeClient")
             Color = autoclass("android.graphics.Color")
 
             class WebViewRunnable(PythonJavaClass):
@@ -106,8 +107,23 @@ class MainApp(App):
                     settings.setJavaScriptEnabled(True)
                     settings.setDomStorageEnabled(True)
                     settings.setMediaPlaybackRequiresUserGesture(False)
+
+                    class PermissionAwareWebChromeClient(PythonJavaClass):
+                        __javabase__ = "android/webkit/WebChromeClient"
+                        __javacontext__ = "app"
+
+                        @java_method("(Landroid/webkit/PermissionRequest;)V")
+                        def onPermissionRequest(self, request):
+                            try:
+                                request.grant(request.getResources())
+                            except Exception as exc:
+                                Logger.warning(f"Main: falha ao conceder permissao WebRTC no WebView: {exc}")
+
+                    self._web_chrome_client = PermissionAwareWebChromeClient()
+
                     webview.setBackgroundColor(Color.BLACK)
                     webview.setWebViewClient(WebViewClient())
+                    webview.setWebChromeClient(self._web_chrome_client)
                     webview.loadUrl(self.url)
                     self.activity.setContentView(webview)
 
