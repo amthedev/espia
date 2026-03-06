@@ -1,6 +1,7 @@
 const params = new URLSearchParams(window.location.search);
 const room = params.get("room") || "sala1";
 const localVideo = document.getElementById("localVideo");
+const mobileBadge = document.getElementById("mobileBadge");
 
 const rtcConfig = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -14,6 +15,11 @@ let recordSessionId = null;
 let shutdownStarted = false;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
+
+function setBadge(text) {
+  if (!mobileBadge) return;
+  mobileBadge.textContent = text;
+}
 
 function wsUrl() {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
@@ -149,16 +155,19 @@ function scheduleReconnect() {
 
 function connectSocket() {
   console.info("[mobile_broadcaster] conectando websocket...");
+  setBadge("Conectando ao servidor...");
   ws = new WebSocket(wsUrl());
 
   ws.onopen = () => {
     console.info("[mobile_broadcaster] websocket conectado.");
     reconnectAttempts = 0;
+    setBadge(`Transmitindo em ${room}`);
   };
 
   ws.onclose = () => {
     console.warn("[mobile_broadcaster] websocket fechado; tentando reconectar.");
     if (!shutdownStarted) {
+      setBadge("Reconectando transmissao...");
       ws = null;
       scheduleReconnect();
     }
@@ -166,6 +175,7 @@ function connectSocket() {
 
   ws.onerror = () => {
     console.error("[mobile_broadcaster] erro no websocket.");
+    setBadge("Erro ao conectar no servidor");
     if (!shutdownStarted) {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.close();
@@ -262,8 +272,10 @@ async function getLocalMediaWithRetry(maxAttempts = 4) {
 async function boot() {
   try {
     console.info("[mobile_broadcaster] inicializando transmissor...");
+    setBadge("Solicitando camera...");
     localStream = await getLocalMediaWithRetry();
     console.info("[mobile_broadcaster] camera/microfone ativos.");
+    setBadge("Camera ativa, conectando...");
     localVideo.srcObject = localStream;
     connectSocket();
 
@@ -273,6 +285,7 @@ async function boot() {
     }
   } catch (error) {
     console.error("Falha ao iniciar transmissao:", error);
+    setBadge("Falha ao iniciar transmissao");
     await shutdownTransmitter();
   }
 }
